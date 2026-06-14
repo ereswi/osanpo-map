@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUserDocument(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function nullableString(value) {
+      return value == null || value is string;
+    }
+
+    function validWalkDocument(userId, deviceId) {
+      return request.resource.data.keys().hasOnly([
+        "deviceId",
+        "userId",
+        "email",
+        "displayName",
+        "visitedCells",
+        "trail",
+        "updatedAt"
+      ])
+      && request.resource.data.deviceId is string
+      && request.resource.data.deviceId == deviceId
+      && request.resource.data.deviceId.size() <= 128
+      && request.resource.data.userId is string
+      && request.resource.data.userId == userId
+      && request.resource.data.email == request.auth.token.email
+      && nullableString(request.resource.data.email)
+      && nullableString(request.resource.data.displayName)
+      && request.resource.data.visitedCells is map
+      && request.resource.data.trail is list
+      && request.resource.data.trail.size() <= 200
+      && request.resource.data.updatedAt is string;
+    }
+
+    match /users/{userId}/devices/{deviceId} {
+      allow read: if ownsUserDocument(userId);
+      allow create, update: if ownsUserDocument(userId)
+        && validWalkDocument(userId, deviceId);
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

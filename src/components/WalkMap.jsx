@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MapContainer,
   Marker,
@@ -40,12 +40,40 @@ function createCurrentLocationIcon(user) {
   return L.divIcon({
     className: 'walker-avatar-marker',
     html: content,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
   })
 }
 
-function LocateControl({ position, onLocate, onLocateError }) {
+function getPointSessionId(point) {
+  return point?.sessionId ?? 'legacy'
+}
+
+function splitTrailIntoSegments(trail) {
+  const segments = []
+  let currentSegment = []
+
+  for (const point of trail) {
+    const previous = currentSegment[currentSegment.length - 1]
+    if (previous && getPointSessionId(previous) !== getPointSessionId(point)) {
+      if (currentSegment.length > 1) segments.push(currentSegment)
+      currentSegment = []
+    }
+
+    currentSegment.push(point)
+  }
+
+  if (currentSegment.length > 1) segments.push(currentSegment)
+  return segments
+}
+
+function LocateControl({
+  position,
+  moveRef,
+  onEnableFollow,
+  onLocate,
+  onLocateError,
+}) {
   const map = useMap()
 
   useEffect(() => {
@@ -58,7 +86,7 @@ function LocateControl({ position, onLocate, onLocateError }) {
       button.type = 'button'
       button.textContent = '現在地'
       button.title = canUseGeolocation
-        ? '現在地へ移動します。未取得の場合は位置情報の許可を求めます。'
+        ? '現在地へ移動し、記録中は追従を再開します'
         : supportError
       button.ariaLabel = button.title
       button.disabled = !canUseGeolocation
@@ -76,6 +104,8 @@ function LocateControl({ position, onLocate, onLocateError }) {
           button.disabled = true
           button.textContent = '取得中'
           const nextPosition = position ?? (await onLocate())
+          if (moveRef) moveRef.current = true
+          onEnableFollow()
 
           map.flyTo(
             [nextPosition.lat, nextPosition.lng],
@@ -85,7 +115,12 @@ function LocateControl({ position, onLocate, onLocateError }) {
               duration: 0.6,
             },
           )
+
+          map.once('moveend', () => {
+            if (moveRef) moveRef.current = false
+          })
         } catch (error) {
+          if (moveRef) moveRef.current = false
           onLocateError(getLocationErrorMessage(error))
         } finally {
           button.disabled = false
@@ -101,7 +136,7 @@ function LocateControl({ position, onLocate, onLocateError }) {
     return () => {
       control.remove()
     }
-  }, [map, onLocate, onLocateError, position])
+  }, [map, moveRef, onEnableFollow, onLocate, onLocateError, position])
 
   return null
 }
@@ -115,11 +150,18 @@ export function WalkMap({
   visitedList,
   isFogEnabled,
   isLocationIconEnabled,
+  isTracking = false,
+  isReviewMode = false,
+  followToken = 0,
 }) {
   const [locatedPosition, setLocatedPosition] = useState(null)
   const [locationError, setLocationError] = useState('')
+  const [disabledFollowToken, setDisabledFollowToken] = useState(null)
+  const programmaticMoveRef = useRef(false)
   const currentPosition = position ?? locatedPosition
   const currentLocationIcon = createCurrentLocationIcon(user)
+  const trailSegments = useMemo(() => splitTrailIntoSegments(trail), [trail])
+  const isFollowing = disabledFollowToken !== followToken
 
   const handleLocate = useCallback(async () => {
     setLocationError('')
@@ -127,6 +169,12 @@ export function WalkMap({
     setLocatedPosition(nextPosition)
     return nextPosition
   }, [])
+
+  const handleUserInteraction = useCallback(() => {
+    if (isTracking) {
+      setDisabledFollowToken(followToken)
+    }
+  }, [followToken, isTracking])
 
   return (
     <section className="map-panel">
@@ -141,32 +189,46 @@ export function WalkMap({
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <RecenterMap center={center} />
-        <LocateControl
-          position={currentPosition}
-          onLocate={handleLocate}
-          onLocateError={setLocationError}
+        <RecenterMap
+          center={center}
+          enabled={!isReviewMode && isTracking && isFollowing}
+          moveRef={programmaticMoveRef}
+          onUserInteraction={handleUserInteraction}
         />
-        <FogOfWar enabled={isFogEnabled} visitedCells={visitedCells} />
+        {!isReviewMode ? (
+          <LocateControl
+            position={currentPosition}
+            moveRef={programmaticMoveRef}
+            onEnableFollow={() => setDisabledFollowToken(null)}
+            onLocate={handleLocate}
+            onLocateError={setLocationError}
+          />
+        ) : null}
+        <FogOfWar enabled={!isReviewMode && isFogEnabled} visitedCells={visitedCells} />
         {visitedList.map((cell) => (
           <Rectangle
             key={cell.id}
             bounds={cellBounds(cell)}
             pathOptions={{
-              color: '#f97316',
+              color: isReviewMode ? '#2563eb' : '#f97316',
               weight: 1,
-              fillColor: '#fb923c',
+              fillColor: isReviewMode ? '#60a5fa' : '#fb923c',
               fillOpacity: 0.38,
             }}
           />
         ))}
-        {trail.length > 1 ? (
+        {trailSegments.map((segment) => (
           <Polyline
-            positions={trail.map((point) => [point.lat, point.lng])}
-            pathOptions={{ color: '#0f172a', weight: 4, opacity: 0.75 }}
+            key={`${segment[0].recordedAt}-${segment[segment.length - 1].recordedAt}`}
+            positions={segment.map((point) => [point.lat, point.lng])}
+            pathOptions={{
+              color: isReviewMode ? '#1d4ed8' : '#0f172a',
+              weight: isReviewMode ? 5 : 4,
+              opacity: 0.75,
+            }}
           />
-        ) : null}
-        {currentPosition && isLocationIconEnabled ? (
+        ))}
+        {currentPosition && isLocationIconEnabled && !isReviewMode ? (
           <Marker
             position={[currentPosition.lat, currentPosition.lng]}
             icon={currentLocationIcon}

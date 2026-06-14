@@ -17,7 +17,7 @@ import {
   getFirestore,
   setDoc,
 } from 'firebase/firestore'
-import { SYNC_TRAIL_POINTS } from '../lib/constants'
+import { SYNC_SESSIONS, SYNC_TRAIL_POINTS } from '../lib/constants'
 
 let firebaseApp
 let firebaseAuth
@@ -134,15 +134,62 @@ function normalizeVisitedCells(rawVisitedCells) {
 function normalizeTrail(rawTrail) {
   if (!Array.isArray(rawTrail)) return []
 
-  return rawTrail.filter((point) => {
-    return (
-      point &&
-      typeof point === 'object' &&
-      Number.isFinite(point.lat) &&
-      Number.isFinite(point.lng) &&
-      typeof point.recordedAt === 'string'
-    )
-  })
+  return rawTrail
+    .filter((point) => {
+      return (
+        point &&
+        typeof point === 'object' &&
+        Number.isFinite(point.lat) &&
+        Number.isFinite(point.lng) &&
+        typeof point.recordedAt === 'string'
+      )
+    })
+    .map((point) => ({
+      lat: point.lat,
+      lng: point.lng,
+      accuracy: Number.isFinite(point.accuracy) ? point.accuracy : null,
+      recordedAt: point.recordedAt,
+      ...(typeof point.sessionId === 'string' ? { sessionId: point.sessionId } : {}),
+    }))
+}
+
+function normalizeStringList(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []
+}
+
+function normalizeSessions(rawSessions) {
+  if (!Array.isArray(rawSessions)) return []
+
+  return rawSessions
+    .filter((session) => session && typeof session === 'object' && session.id)
+    .map((session) => {
+      const trail = normalizeTrail(session.trail)
+
+      return {
+        id: String(session.id),
+        startedAt:
+          typeof session.startedAt === 'string'
+            ? session.startedAt
+            : new Date(0).toISOString(),
+        endedAt:
+          typeof session.endedAt === 'string'
+            ? session.endedAt
+            : typeof session.startedAt === 'string'
+              ? session.startedAt
+              : new Date(0).toISOString(),
+        distanceMeters: Number.isFinite(session.distanceMeters)
+          ? session.distanceMeters
+          : 0,
+        visitedCellIds: normalizeStringList(session.visitedCellIds),
+        newVisitedCellIds: normalizeStringList(session.newVisitedCellIds),
+        pointCount: Number.isFinite(session.pointCount)
+          ? session.pointCount
+          : trail.length,
+        trail,
+      }
+    })
+    .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))
+    .slice(0, SYNC_SESSIONS)
 }
 
 function mergeVisitedCellsByFreshness(current, incoming) {
@@ -174,7 +221,7 @@ function mergeTrailPoints(points) {
   const uniquePoints = []
 
   for (const point of points) {
-    const id = `${point.recordedAt}:${point.lat}:${point.lng}`
+    const id = `${point.recordedAt}:${point.lat}:${point.lng}:${point.sessionId ?? ''}`
     if (seen.has(id)) continue
     seen.add(id)
     uniquePoints.push(point)
@@ -185,6 +232,20 @@ function mergeTrailPoints(points) {
   })
 
   return uniquePoints.slice(-SYNC_TRAIL_POINTS)
+}
+
+function mergeSessions(sessions) {
+  const merged = new Map()
+
+  for (const session of sessions) {
+    if (!session?.id) continue
+    const existing = merged.get(session.id)
+    if (!existing || Date.parse(session.endedAt) >= Date.parse(existing.endedAt)) {
+      merged.set(session.id, session)
+    }
+  }
+
+  return normalizeSessions([...merged.values()])
 }
 
 async function ensurePersistence(auth) {
@@ -278,12 +339,13 @@ export async function signOutUser() {
 export async function loadVisitedState(user) {
   const db = getDb()
   if (!db || !user) {
-    return { visitedCells: {}, trail: [] }
+    return { visitedCells: {}, sessions: [], trail: [] }
   }
 
   const snapshot = await getDocs(collection(db, 'users', user.uid, 'devices'))
   let visitedCells = {}
   const trailPoints = []
+  const sessions = []
 
   snapshot.forEach((deviceDoc) => {
     const data = deviceDoc.data()
@@ -292,15 +354,23 @@ export async function loadVisitedState(user) {
       normalizeVisitedCells(data.visitedCells),
     )
     trailPoints.push(...normalizeTrail(data.trail))
+    sessions.push(...normalizeSessions(data.sessions))
   })
 
   return {
     visitedCells,
+    sessions: mergeSessions(sessions),
     trail: mergeTrailPoints(trailPoints),
   }
 }
 
-export async function syncVisitedCells({ user, deviceId, visitedCells, trail }) {
+export async function syncVisitedCells({
+  user,
+  deviceId,
+  visitedCells,
+  sessions,
+  trail,
+}) {
   const db = getDb()
   if (!db || !user) return
 
@@ -312,6 +382,7 @@ export async function syncVisitedCells({ user, deviceId, visitedCells, trail }) 
       email: user.email ?? null,
       displayName: user.displayName ?? null,
       visitedCells,
+      sessions: sessions.slice(0, SYNC_SESSIONS),
       trail: trail.slice(-SYNC_TRAIL_POINTS),
       updatedAt: new Date().toISOString(),
     },

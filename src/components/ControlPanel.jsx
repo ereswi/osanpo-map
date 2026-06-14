@@ -7,6 +7,8 @@ export function ControlPanel({
   isAuthenticated,
   status,
   error,
+  syncError,
+  syncStatus,
   position,
   visitedCount,
   totalDistanceMeters,
@@ -18,6 +20,7 @@ export function ControlPanel({
   onBlackout,
   onToggleFog,
   onToggleLocationIcon,
+  onOpenHistory,
   onClear,
   onSignOut,
 }) {
@@ -30,12 +33,17 @@ export function ControlPanel({
     setIsMenuOpen(false)
   }
 
+  const handleOpenHistory = () => {
+    onOpenHistory()
+    setIsMenuOpen(false)
+  }
+
   return (
     <section className="hero-panel">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Osanpo Map Prototype</p>
-          <h1>歩いた場所をグリッドで塗っていく散歩地図</h1>
+          <h1>歩いた場所をグリッドで埋めていく散歩地図</h1>
         </div>
         <button
           type="button"
@@ -70,6 +78,10 @@ export function ControlPanel({
             ) : null}
           </div>
 
+          <button type="button" className="settings-item" onClick={handleOpenHistory}>
+            <span>履歴</span>
+            <strong>一覧を見る</strong>
+          </button>
           <button type="button" className="settings-item" onClick={onToggleFog}>
             <span>雲の表示</span>
             <strong>{isFogEnabled ? '表示中' : '非表示'}</strong>
@@ -97,7 +109,7 @@ export function ControlPanel({
         <div className="confirm-card" role="alertdialog" aria-modal="false">
           <strong>探索記録をリセットしますか？</strong>
           <p>
-            探索済みグリッドと歩行ログをこの端末から削除します。この操作は元に戻せません。
+            探索済みグリッド、歩行ログ、履歴をこの端末から削除します。この操作は元に戻せません。
           </p>
           <div className="confirm-actions">
             <button type="button" className="danger-button" onClick={handleClear}>
@@ -144,6 +156,10 @@ export function ControlPanel({
           <span>画面スリープ防止</span>
           <strong>{wakeLockActive ? '有効' : '未使用'}</strong>
         </article>
+        <article>
+          <span>Firestore</span>
+          <strong>{syncStatus}</strong>
+        </article>
       </div>
 
       {position ? (
@@ -158,6 +174,7 @@ export function ControlPanel({
       )}
 
       {error ? <p className="error-banner">{error}</p> : null}
+      {syncError ? <p className="error-banner">{syncError}</p> : null}
     </section>
   )
 }

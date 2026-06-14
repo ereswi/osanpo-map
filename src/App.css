@@ -118,7 +118,24 @@
   min-width: 0;
 }
 
+.history-panel {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-right: 1px solid rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(10px);
+  min-width: 0;
+}
+
 .panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -243,10 +260,99 @@
   color: #111827;
 }
 
+.history-panel h1 {
+  margin: 0;
+  font-size: 2.3rem;
+  line-height: 1;
+  color: #111827;
+}
+
 .lede {
   margin: 16px 0 0;
   color: #4b5563;
   line-height: 1.7;
+}
+
+.history-empty,
+.history-selection-note {
+  margin: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #4b5563;
+}
+
+.history-empty {
+  display: grid;
+  gap: 8px;
+}
+
+.history-empty p {
+  margin: 0;
+}
+
+.history-list {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.history-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.history-card:hover,
+.history-card.is-selected {
+  transform: translateY(-1px);
+  border-color: rgba(234, 88, 12, 0.42);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+}
+
+.history-card__date {
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.history-card strong {
+  font-size: 1.45rem;
+}
+
+.history-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.history-card dl div {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.history-card dt {
+  color: #6b7280;
+  font-size: 0.78rem;
+}
+
+.history-card dd {
+  margin: 4px 0 0;
+  font-weight: 800;
 }
 
 .control-row {
@@ -362,8 +468,8 @@
 
 .walker-avatar-ring {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -386,7 +492,7 @@
 .walker-avatar-fallback {
   color: #ffffff;
   font-weight: 800;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
 }
 
 .map-locate-button {
@@ -492,8 +598,18 @@
     padding: 24px;
   }
 
+  .history-panel {
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+    padding: 24px;
+  }
+
   .hero-panel h1 {
     font-size: 2.25rem;
+  }
+
+  .history-panel h1 {
+    font-size: 2rem;
   }
 
   .blackout__content h1 {
@@ -521,8 +637,21 @@
     gap: 20px;
   }
 
+  .history-panel {
+    padding: 20px;
+    gap: 18px;
+  }
+
+  .history-heading {
+    flex-direction: column;
+  }
+
   .hero-panel h1 {
     font-size: 2rem;
+  }
+
+  .history-card dl {
+    grid-template-columns: 1fr;
   }
 
   .blackout__content h1 {

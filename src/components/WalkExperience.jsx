@@ -6,7 +6,7 @@ import { WalkMap } from './WalkMap'
 import { usePersistentFlag } from '../hooks/usePersistentFlag'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useWalkRecorder } from '../hooks/useWalkRecorder'
-import { FOG_ENABLED_KEY, LOCATION_ICON_ENABLED_KEY } from '../lib/constants'
+import { FOG_ENABLED_KEY } from '../lib/constants'
 
 function getSessionCenter(session, fallbackCenter) {
   const firstPoint = session?.trail?.[0]
@@ -45,11 +45,6 @@ export function WalkExperience({
   const [isFogEnabled, setIsFogEnabled] = usePersistentFlag({
     storageScope,
     key: FOG_ENABLED_KEY,
-    defaultValue: true,
-  })
-  const [isLocationIconEnabled, setIsLocationIconEnabled] = usePersistentFlag({
-    storageScope,
-    key: LOCATION_ICON_ENABLED_KEY,
     defaultValue: true,
   })
   const wakeLockActive = useWakeLock(recorder.isTracking)
@@ -108,12 +103,10 @@ export function WalkExperience({
         <WalkMap
           center={getSessionCenter(selectedSession, recorder.mapCenter)}
           position={null}
-          user={user}
           trail={selectedSession?.trail ?? []}
           visitedCells={sessionVisitedCells}
           visitedList={sessionVisitedList}
           isFogEnabled={false}
-          isLocationIconEnabled={false}
           isReviewMode
         />
       </main>
@@ -135,12 +128,10 @@ export function WalkExperience({
         totalDistanceMeters={recorder.totalDistanceMeters}
         isTracking={recorder.isTracking}
         isFogEnabled={isFogEnabled}
-        isLocationIconEnabled={isLocationIconEnabled}
         wakeLockActive={wakeLockActive}
         onStartStop={handleStartStop}
         onBlackout={() => setIsBlackout(true)}
         onToggleFog={() => setIsFogEnabled((current) => !current)}
-        onToggleLocationIcon={() => setIsLocationIconEnabled((current) => !current)}
         onOpenHistory={openHistory}
         onClear={recorder.clearExploration}
         onSignOut={onSignOut}
@@ -148,12 +139,10 @@ export function WalkExperience({
       <WalkMap
         center={recorder.mapCenter}
         position={recorder.position}
-        user={user}
         trail={recorder.trail}
         visitedCells={recorder.visitedCells}
         visitedList={recorder.visitedList}
         isFogEnabled={isFogEnabled}
-        isLocationIconEnabled={isLocationIconEnabled}
         isTracking={recorder.isTracking}
         followToken={followToken}
       />

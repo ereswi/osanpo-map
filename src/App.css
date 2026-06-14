@@ -461,15 +461,15 @@
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
 }
 
-.walker-avatar-marker {
+.current-location-marker {
   display: grid;
   place-items: center;
 }
 
-.walker-avatar-ring {
+.current-location-dot {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: 14px;
+  height: 14px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -477,22 +477,8 @@
   background: #2563eb;
   border: 2px solid #fff;
   box-shadow:
-    0 0 0 4px rgba(37, 99, 235, 0.14),
+    0 0 0 7px rgba(37, 99, 235, 0.16),
     0 8px 16px rgba(15, 23, 42, 0.2);
-}
-
-.walker-avatar-ring img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.walker-avatar-fallback {
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 0.62rem;
 }
 
 .map-locate-button {

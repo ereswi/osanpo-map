@@ -17,33 +17,12 @@ import {
 } from '../lib/geolocation'
 import { cellBounds } from '../lib/grid'
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
-function getUserInitial(user) {
-  const source = user?.displayName || user?.email || 'U'
-  return source.trim().charAt(0).toUpperCase()
-}
-
-function createCurrentLocationIcon(user) {
-  const photoUrl = user?.photoURL
-  const content = photoUrl
-    ? `<span class="walker-avatar-ring"><img src="${escapeHtml(photoUrl)}" alt="" referrerpolicy="no-referrer" /></span>`
-    : `<span class="walker-avatar-ring walker-avatar-fallback">${escapeHtml(getUserInitial(user))}</span>`
-
-  return L.divIcon({
-    className: 'walker-avatar-marker',
-    html: content,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  })
-}
+const currentLocationIcon = L.divIcon({
+  className: 'current-location-marker',
+  html: '<span class="current-location-dot" />',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+})
 
 function getPointSessionId(point) {
   return point?.sessionId ?? 'legacy'
@@ -144,12 +123,10 @@ function LocateControl({
 export function WalkMap({
   center,
   position,
-  user,
   trail,
   visitedCells,
   visitedList,
   isFogEnabled,
-  isLocationIconEnabled,
   isTracking = false,
   isReviewMode = false,
   followToken = 0,
@@ -159,7 +136,6 @@ export function WalkMap({
   const [disabledFollowToken, setDisabledFollowToken] = useState(null)
   const programmaticMoveRef = useRef(false)
   const currentPosition = position ?? locatedPosition
-  const currentLocationIcon = createCurrentLocationIcon(user)
   const trailSegments = useMemo(() => splitTrailIntoSegments(trail), [trail])
   const isFollowing = disabledFollowToken !== followToken
 
@@ -228,7 +204,7 @@ export function WalkMap({
             }}
           />
         ))}
-        {currentPosition && isLocationIconEnabled && !isReviewMode ? (
+        {currentPosition && !isReviewMode ? (
           <Marker
             position={[currentPosition.lat, currentPosition.lng]}
             icon={currentLocationIcon}

@@ -14,12 +14,10 @@ export function ControlPanel({
   totalDistanceMeters,
   isTracking,
   isFogEnabled,
-  isLocationIconEnabled,
   wakeLockActive,
   onStartStop,
   onBlackout,
   onToggleFog,
-  onToggleLocationIcon,
   onOpenHistory,
   onClear,
   onSignOut,
@@ -85,14 +83,6 @@ export function ControlPanel({
           <button type="button" className="settings-item" onClick={onToggleFog}>
             <span>雲の表示</span>
             <strong>{isFogEnabled ? '表示中' : '非表示'}</strong>
-          </button>
-          <button
-            type="button"
-            className="settings-item"
-            onClick={onToggleLocationIcon}
-          >
-            <span>現在地アイコン</span>
-            <strong>{isLocationIconEnabled ? '表示中' : '非表示'}</strong>
           </button>
           <button
             type="button"

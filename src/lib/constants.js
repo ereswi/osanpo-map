@@ -7,7 +7,6 @@ export const SYNC_SESSIONS = 100
 
 export const WALK_STATE_KEY = 'walk-state'
 export const FOG_ENABLED_KEY = 'fog-enabled'
-export const LOCATION_ICON_ENABLED_KEY = 'location-icon-enabled'
 export const DEVICE_ID_KEY = 'osanpo-map-device-id'
 export const STORAGE_PREFIX = 'osanpo-map'
 

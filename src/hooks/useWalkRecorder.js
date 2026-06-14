@@ -17,7 +17,7 @@ import {
   readJson,
   safeStorageSet,
 } from '../lib/storage'
-import { syncVisitedCells } from '../services/firebase'
+import { loadVisitedState, syncVisitedCells } from '../services/firebase'
 
 const MIN_TRAIL_DISTANCE_METERS = 5
 const MIN_POSITION_UPDATE_METERS = 12
@@ -66,6 +66,49 @@ function shouldIgnorePositionJitter(previous, next) {
   return movedMeters < threshold && elapsedMs < MAX_POSITION_UPDATE_INTERVAL_MS
 }
 
+function mergeVisitedCells(current, incoming) {
+  const merged = { ...current }
+
+  for (const [id, nextCell] of Object.entries(incoming)) {
+    const currentCell = merged[id]
+    if (!currentCell) {
+      merged[id] = nextCell
+      continue
+    }
+
+    const currentVisitedAt = Date.parse(currentCell.visitedAt ?? '')
+    const nextVisitedAt = Date.parse(nextCell.visitedAt ?? '')
+
+    if (
+      Number.isNaN(currentVisitedAt) ||
+      (!Number.isNaN(nextVisitedAt) && nextVisitedAt >= currentVisitedAt)
+    ) {
+      merged[id] = nextCell
+    }
+  }
+
+  return merged
+}
+
+function mergeTrail(current, incoming) {
+  const seen = new Set()
+  const merged = []
+
+  for (const point of [...current, ...incoming]) {
+    if (!point?.recordedAt) continue
+    const id = `${point.recordedAt}:${point.lat}:${point.lng}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push(point)
+  }
+
+  merged.sort((left, right) => {
+    return Date.parse(left.recordedAt) - Date.parse(right.recordedAt)
+  })
+
+  return merged.slice(-MAX_STORED_TRAIL_POINTS)
+}
+
 export function useWalkRecorder({ storageScope, user, canSync }) {
   const stored = useMemo(() => loadWalkState(storageScope), [storageScope])
   const [position, setPosition] = useState(null)
@@ -74,9 +117,12 @@ export function useWalkRecorder({ storageScope, user, canSync }) {
   const [isTracking, setIsTracking] = useState(false)
   const [status, setStatus] = useState('まだ記録を開始していません')
   const [error, setError] = useState('')
+  const [restoredUserId, setRestoredUserId] = useState('')
   const watchIdRef = useRef(null)
-  const lastAcceptedPositionRef = useRef(null)
+  const lastAcceptedPositionRef = useRef(getLastItem(stored.trail))
   const deviceId = useMemo(() => getDeviceId(), [])
+  const restoreTargetUserId = canSync && user ? user.uid : ''
+  const isRestoring = Boolean(restoreTargetUserId && restoredUserId !== restoreTargetUserId)
 
   const visitedList = useMemo(
     () =>
@@ -111,6 +157,35 @@ export function useWalkRecorder({ storageScope, user, canSync }) {
   useEffect(() => {
     if (!canSync || !user) return
 
+    let cancelled = false
+
+    void loadVisitedState(user)
+      .then((remoteState) => {
+        if (cancelled) return
+
+        setVisitedCells((current) => mergeVisitedCells(current, remoteState.visitedCells))
+        setTrail((current) => {
+          const mergedTrail = mergeTrail(current, remoteState.trail)
+          lastAcceptedPositionRef.current = getLastItem(mergedTrail)
+          return mergedTrail
+        })
+        setRestoredUserId(user.uid)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('保存済みの記録を読み込めませんでした。ローカルの記録で続行します。')
+          setRestoredUserId(user.uid)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [canSync, user])
+
+  useEffect(() => {
+    if (!canSync || !user || isRestoring) return
+
     syncVisitedCells({
       user,
       deviceId,
@@ -119,7 +194,7 @@ export function useWalkRecorder({ storageScope, user, canSync }) {
     }).catch(() => {
       return
     })
-  }, [canSync, deviceId, trail, user, visitedCells])
+  }, [canSync, deviceId, isRestoring, trail, user, visitedCells])
 
   useEffect(
     () => () => {
@@ -214,6 +289,7 @@ export function useWalkRecorder({ storageScope, user, canSync }) {
   return {
     clearExploration,
     error,
+    isRestoring,
     isTracking,
     mapCenter,
     position,

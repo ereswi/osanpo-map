@@ -10,7 +10,13 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth'
-import { doc, getFirestore, setDoc } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  getDocs,
+  getFirestore,
+  setDoc,
+} from 'firebase/firestore'
 import { SYNC_TRAIL_POINTS } from '../lib/constants'
 
 let firebaseApp
@@ -102,6 +108,85 @@ function normalizeFirebaseError(error) {
   }
 }
 
+function normalizeVisitedCells(rawVisitedCells) {
+  if (!rawVisitedCells || typeof rawVisitedCells !== 'object') {
+    return {}
+  }
+
+  const normalized = {}
+  for (const [id, cell] of Object.entries(rawVisitedCells)) {
+    if (!cell || typeof cell !== 'object') continue
+    if (!Number.isFinite(cell.gridX) || !Number.isFinite(cell.gridY)) continue
+
+    normalized[id] = {
+      gridX: cell.gridX,
+      gridY: cell.gridY,
+      lat: Number.isFinite(cell.lat) ? cell.lat : null,
+      lng: Number.isFinite(cell.lng) ? cell.lng : null,
+      visitedAt:
+        typeof cell.visitedAt === 'string' ? cell.visitedAt : new Date(0).toISOString(),
+    }
+  }
+
+  return normalized
+}
+
+function normalizeTrail(rawTrail) {
+  if (!Array.isArray(rawTrail)) return []
+
+  return rawTrail.filter((point) => {
+    return (
+      point &&
+      typeof point === 'object' &&
+      Number.isFinite(point.lat) &&
+      Number.isFinite(point.lng) &&
+      typeof point.recordedAt === 'string'
+    )
+  })
+}
+
+function mergeVisitedCellsByFreshness(current, incoming) {
+  const merged = { ...current }
+
+  for (const [id, nextCell] of Object.entries(incoming)) {
+    const currentCell = merged[id]
+    if (!currentCell) {
+      merged[id] = nextCell
+      continue
+    }
+
+    const currentVisitedAt = Date.parse(currentCell.visitedAt ?? '')
+    const nextVisitedAt = Date.parse(nextCell.visitedAt ?? '')
+
+    if (
+      Number.isNaN(currentVisitedAt) ||
+      (!Number.isNaN(nextVisitedAt) && nextVisitedAt >= currentVisitedAt)
+    ) {
+      merged[id] = nextCell
+    }
+  }
+
+  return merged
+}
+
+function mergeTrailPoints(points) {
+  const seen = new Set()
+  const uniquePoints = []
+
+  for (const point of points) {
+    const id = `${point.recordedAt}:${point.lat}:${point.lng}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    uniquePoints.push(point)
+  }
+
+  uniquePoints.sort((left, right) => {
+    return Date.parse(left.recordedAt) - Date.parse(right.recordedAt)
+  })
+
+  return uniquePoints.slice(-SYNC_TRAIL_POINTS)
+}
+
 async function ensurePersistence(auth) {
   if (!persistencePromise) {
     persistencePromise = setPersistence(auth, browserLocalPersistence).catch(() => {
@@ -188,6 +273,31 @@ export async function signOutUser() {
   if (!auth) return
 
   await signOut(auth)
+}
+
+export async function loadVisitedState(user) {
+  const db = getDb()
+  if (!db || !user) {
+    return { visitedCells: {}, trail: [] }
+  }
+
+  const snapshot = await getDocs(collection(db, 'users', user.uid, 'devices'))
+  let visitedCells = {}
+  const trailPoints = []
+
+  snapshot.forEach((deviceDoc) => {
+    const data = deviceDoc.data()
+    visitedCells = mergeVisitedCellsByFreshness(
+      visitedCells,
+      normalizeVisitedCells(data.visitedCells),
+    )
+    trailPoints.push(...normalizeTrail(data.trail))
+  })
+
+  return {
+    visitedCells,
+    trail: mergeTrailPoints(trailPoints),
+  }
 }
 
 export async function syncVisitedCells({ user, deviceId, visitedCells, trail }) {
